@@ -1,0 +1,46 @@
+name: Build APK
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: stable
+          cache: true
+      - name: Buat project Flutter + salin kode
+        run: |
+          flutter create --platforms=android --org com.locationself --project-name gps_locationself gps_app
+          rm -rf gps_app/test
+          cp app_src/pubspec.yaml gps_app/pubspec.yaml
+          rm -rf gps_app/lib && cp -r app_src/lib gps_app/lib
+      - name: Patch izin Android
+        run: |
+          python3 - <<'PY'
+          p='gps_app/android/app/src/main/AndroidManifest.xml'
+          s=open(p).read()
+          names=['INTERNET','ACCESS_FINE_LOCATION','ACCESS_COARSE_LOCATION','FOREGROUND_SERVICE','FOREGROUND_SERVICE_LOCATION','POST_NOTIFICATIONS','WAKE_LOCK','REQUEST_IGNORE_BATTERY_OPTIMIZATIONS']
+          perms=''.join('<uses-permission android:name="android.permission.%s"/>\n    '%n for n in names)
+          s=s.replace('<application',perms+'<application',1)
+          import re
+          s=re.sub(r'android:label="[^"]*"','android:label="GPS LocationSelf"',s,1)
+          open(p,'w').write(s)
+          PY
+      - name: Build APK
+        working-directory: gps_app
+        run: |
+          flutter pub get
+          flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GPS-LocationSelf-APK
+          path: gps_app/build/app/outputs/flutter-apk/app-release.apk
